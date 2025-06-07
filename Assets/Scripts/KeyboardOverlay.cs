@@ -24,7 +24,7 @@ public class KeyboardOverlay : MonoBehaviour
         float startY = 100f;
 
         float middleRowOffset = keySpacing / 4f;
-        float bottomRowOffset = keySpacing / 1.5f;
+        float bottomRowOffset = keySpacing / 1.4f;
 
         float globalXOffset = -80f;
 
