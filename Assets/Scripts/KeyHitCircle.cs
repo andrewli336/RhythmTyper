@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
+using System.Collections.Generic;
 
 public class KeyHitCircle : MonoBehaviour
 {
@@ -11,50 +12,86 @@ public class KeyHitCircle : MonoBehaviour
 
     [Header("Settings")]
     public float flashDuration = 0.05f;
+    public float fadeOutDuration = 0.3f;
+    public float stayTimeAfterHit = 0.2f;
 
     private Coroutine glowRoutine;
 
-    public void ShowApproach(float approachTime)
+    private class ApproachInstance
+    {
+        public GameObject obj;
+        public Image img;
+        public Coroutine fadeCoroutine;
+    }
+
+    private List<ApproachInstance> activeCircles = new();
+
+    public void AddApproachCircle(float scale, float alpha)
     {
         if (approachCirclePrefab == null || approachCircleContainer == null) return;
 
         GameObject obj = Instantiate(approachCirclePrefab, approachCircleContainer);
-        Image circle = obj.GetComponent<Image>();
-        if (circle == null) return;
+        Image img = obj.GetComponent<Image>();
+        if (img == null) return;
 
-        obj.transform.localScale = Vector3.one * 2f;
-        circle.color = new Color(1f, 1f, 1f, 0f);
+        obj.transform.localScale = Vector3.one * scale;
+        img.color = new Color(1f, 1f, 1f, alpha);
         obj.SetActive(true);
 
-        StartCoroutine(AnimateAndDestroy(obj, circle, approachTime));
+        ApproachInstance inst = new()
+        {
+            obj = obj,
+            img = img,
+            fadeCoroutine = null
+        };
+        activeCircles.Add(inst);
     }
 
-    private IEnumerator AnimateAndDestroy(GameObject obj, Image circle, float duration)
+    public void UpdateApproachCircleScale(int index, float scale, float alpha)
     {
+        if (index < 0 || index >= activeCircles.Count) return;
+
+        var inst = activeCircles[index];
+        inst.obj.transform.localScale = Vector3.one * scale;
+        var color = inst.img.color;
+        color.a = alpha;
+        inst.img.color = color;
+    }
+
+    public void FadeOutApproachCircle(int index)
+    {
+        if (index < 0 || index >= activeCircles.Count) return;
+
+        var inst = activeCircles[index];
+        if (inst.fadeCoroutine != null) StopCoroutine(inst.fadeCoroutine);
+        inst.fadeCoroutine = StartCoroutine(FadeOutRoutine(inst));
+    }
+
+    public void ClearAll()
+    {
+        foreach (var inst in activeCircles)
+        {
+            if (inst.obj != null) Destroy(inst.obj);
+        }
+        activeCircles.Clear();
+    }
+
+    private IEnumerator FadeOutRoutine(ApproachInstance inst)
+    {
+        yield return new WaitForSeconds(stayTimeAfterHit);
+
         float t = 0f;
-        float fadeInTime = 0.2f;
-        Vector3 startScale = Vector3.one * 2f;
-        Vector3 endScale = Vector3.one;
+        Color start = inst.img.color;
+        Color end = new Color(start.r, start.g, start.b, 0f);
 
-        obj.transform.localScale = startScale;
-
-        while (t < duration)
+        while (t < fadeOutDuration)
         {
             t += Time.deltaTime;
-            float progress = t / duration;
-
-            obj.transform.localScale = Vector3.Lerp(startScale, endScale, progress);
-            float alpha = Mathf.Clamp01(t / fadeInTime);
-            circle.color = new Color(1f, 1f, 1f, alpha);
-
+            inst.img.color = Color.Lerp(start, end, t / fadeOutDuration);
             yield return null;
         }
 
-        obj.transform.localScale = endScale;
-        circle.color = new Color(1f, 1f, 1f, 1f);
-        yield return new WaitForSeconds(0.2f);
-
-        Destroy(obj);
+        if (inst.obj != null) Destroy(inst.obj);
     }
 
     public void Flash()
@@ -72,5 +109,10 @@ public class KeyHitCircle : MonoBehaviour
         keyGlowOverlay.gameObject.SetActive(true);
         yield return new WaitForSeconds(flashDuration);
         keyGlowOverlay.gameObject.SetActive(false);
+    }
+
+    public int GetCircleCount()
+    {
+        return activeCircles.Count;
     }
 }

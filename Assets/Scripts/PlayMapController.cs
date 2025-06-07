@@ -31,6 +31,7 @@ public class PlayMapController : MonoBehaviour
     [Header("References")]
     public AudioSource audioSource;
     public KeyboardOverlay keyboardOverlay;
+    public GameObject approachCirclePrefab;
 
     [Header("Judgment UI")]
     public GameObject judgmentDisplayPrefab;
@@ -38,12 +39,17 @@ public class PlayMapController : MonoBehaviour
 
     [Header("Settings")]
     public float approachTime = 0.6f;
-    public float startDelay = 2f;
+    public float startDelay = 1f;
+
+    [Header("Audio")]
+    public AudioClip hitSound;
+    public AudioClip missSound;
+    public AudioSource sfxSource;
 
     private Coroutine fadeCoroutine = null;
     private Coroutine bounceCoroutine = null;
     private List<Note> notes = new();
-    private int nextNoteIndex = 0;
+    private Dictionary<Note, NoteApproachCircle> noteToVisualMap = new();
     private GameObject currentJudgmentInstance = null;
 
     public enum NoteState { Pending, Shown, Hit, Missed }
@@ -90,11 +96,22 @@ public class PlayMapController : MonoBehaviour
         if (tex != null)
         {
             backgroundRawImage.texture = tex;
-            backgroundRawImage.color = new Color(1f, 1f, 1f, 0.5f);
+            backgroundRawImage.color = new Color(1f, 1f, 1f, 0.3f);
             backgroundRawImage.gameObject.SetActive(true);
         }
 
         notes.AddRange(map.notes);
+
+        foreach (var note in notes)
+        {
+            if (keyboardOverlay.TryGetKey(GetLetterForLane(note.lane), out var rt))
+            {
+                var obj = Instantiate(approachCirclePrefab, rt);
+                var visual = obj.GetComponent<NoteApproachCircle>();
+                visual.Initialize(note.time, approachTime);
+                noteToVisualMap[note] = visual;
+            }
+        }
 
         AudioClip clip = Resources.Load<AudioClip>("Songs/" + map.metadata.audioFileName);
         if (clip == null) return;
@@ -110,46 +127,46 @@ public class PlayMapController : MonoBehaviour
         if (!audioSource.isPlaying) return;
         float songTime = audioSource.time;
 
-        while (nextNoteIndex < notes.Count && songTime >= notes[nextNoteIndex].time - approachTime)
+        foreach (var note in notes)
         {
-            ShowApproach(notes[nextNoteIndex].lane);
-            notes[nextNoteIndex].state = NoteState.Shown;
-            nextNoteIndex++;
+            if (note.state == NoteState.Pending && note.time - songTime <= approachTime)
+                note.state = NoteState.Shown;
+
+            if ((note.state == NoteState.Shown || note.state == NoteState.Hit) && noteToVisualMap.TryGetValue(note, out var visual))
+            {
+                visual.UpdateState(songTime);
+            }
         }
 
         HandleKeyPresses(songTime);
         CheckForMisses(songTime);
 
-        if (!mapEnded && nextNoteIndex >= notes.Count)
+        if (!mapEnded)
         {
             float lastNoteTime = notes.Count > 0 ? notes[^1].time : 0f;
-            if (audioSource.time >= lastNoteTime + 1f) EndMap();
+            if (songTime >= lastNoteTime + 1f) EndMap();
         }
     }
 
     void HandleKeyPresses(float songTime)
     {
         for (int i = 0; i < 26; i++)
-        {
-            if (Input.GetKeyDown(KeyCode.A + i))
-                JudgeKey((char)('A' + i), i, songTime);
-        }
-        if (Input.GetKeyDown(KeyCode.Comma))
-            JudgeKey(',', 26, songTime);
+            if (Input.GetKeyDown(KeyCode.A + i)) JudgeKey((char)('A' + i), i, songTime);
+
+        if (Input.GetKeyDown(KeyCode.Comma)) JudgeKey(',', 26, songTime);
+        if (Input.GetKeyDown(KeyCode.Period)) JudgeKey('.', 27, songTime);
+        if (Input.GetKeyDown(KeyCode.Semicolon)) JudgeKey(';', 28, songTime);
+        if (Input.GetKeyDown(KeyCode.Slash)) JudgeKey('/', 29, songTime);
     }
 
     void JudgeKey(char letter, int lane, float songTime)
     {
-        if (keyboardOverlay.TryGetKey(letter, out var rt))
-            rt.GetComponent<KeyHitCircle>()?.Flash();
-
-        for (int i = 0; i < notes.Count; i++)
+        foreach (var note in notes)
         {
-            var note = notes[i];
             if (note.state != NoteState.Shown || note.lane != lane) continue;
 
             float diff = songTime - note.time;
-            if (Mathf.Abs(diff) <= 0.30f)
+            if (Mathf.Abs(diff) <= 0.3f)
             {
                 string judgment;
                 Color color;
@@ -167,12 +184,17 @@ public class PlayMapController : MonoBehaviour
                     judgment = "OK"; color = Color.yellow; totalAccuracyPoints += 0.1667f; oks++;
                 }
 
+                if (noteToVisualMap.TryGetValue(note, out var visual))
+                    visual.ForceFadeOut();
+
                 combo++;
                 maxCombo = Mathf.Max(combo, maxCombo);
                 score += Mathf.RoundToInt(300f * (1f + combo / 10f));
                 totalHits++;
                 UpdateScoreUI();
                 ShowJudgment(judgment, color);
+                if (hitSound != null && sfxSource != null)
+                    sfxSource.PlayOneShot(hitSound);
                 note.state = NoteState.Hit;
                 return;
             }
@@ -186,6 +208,10 @@ public class PlayMapController : MonoBehaviour
             if (note.state == NoteState.Shown && songTime - note.time > 0.15f)
             {
                 ShowJudgment("Miss", Color.red);
+                if (noteToVisualMap.TryGetValue(note, out var visual))
+                    visual.ForceFadeOut();
+                if (missSound != null && sfxSource != null)
+                    sfxSource.PlayOneShot(missSound);
                 note.state = NoteState.Missed;
                 misses++;
                 combo = 0;
@@ -222,13 +248,6 @@ public class PlayMapController : MonoBehaviour
         scoreText.text = $"Score: {score}";
         float accuracy = totalHits > 0 ? (totalAccuracyPoints / totalHits) * 100f : 100f;
         accuracyText.text = $"Accuracy: {accuracy:F2}%";
-    }
-
-    void ShowApproach(int lane)
-    {
-        char letter = lane < 26 ? (char)('A' + lane) : ',';
-        if (keyboardOverlay.TryGetKey(letter, out var rt))
-            rt.GetComponent<KeyHitCircle>()?.ShowApproach(approachTime);
     }
 
     void ShowJudgment(string text, Color color)
@@ -313,5 +332,18 @@ public class PlayMapController : MonoBehaviour
     public void OnRetryButtonPressed()
     {
         UnityEngine.SceneManagement.SceneManager.LoadScene("PlayMapScene");
+    }
+
+    char GetLetterForLane(int lane)
+    {
+        return lane switch
+        {
+            < 26 => (char)('A' + lane),
+            26 => ',',
+            27 => '.',
+            28 => ';',
+            29 => '/',
+            _ => '?'
+        };
     }
 }

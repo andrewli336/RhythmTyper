@@ -557,10 +557,14 @@ MonoBehaviour:
   quitButton: {fileID: 1841616244}
   audioSource: {fileID: 1756605318}
   keyboardOverlay: {fileID: 169541432}
+  approachCirclePrefab: {fileID: 5371598746938925296, guid: 570032faad39f4d7c9e4d558aee84609, type: 3}
   judgmentDisplayPrefab: {fileID: 4545605761354297636, guid: a3eb8bf86a95342c083a88f7a5b2b94d, type: 3}
   judgmentParent: {fileID: 440691953}
   approachTime: 1
   startDelay: 2
+  hitSound: {fileID: 8300000, guid: 2c57d12db013f4f7e93e6c4ee55fa5fc, type: 3}
+  missSound: {fileID: 8300000, guid: b4a6c4b26941045e890df9fedcd7d98f, type: 3}
+  sfxSource: {fileID: 1381632598}
 --- !u!4 &256512117
 Transform:
   m_ObjectHideFlags: 0
@@ -1636,7 +1640,7 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 0}
   m_PlayOnAwake: 1
-  m_Volume: 0
+  m_Volume: 1
   m_Pitch: 1
   Loop: 0
   Mute: 0

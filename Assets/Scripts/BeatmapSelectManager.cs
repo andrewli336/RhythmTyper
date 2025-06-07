@@ -60,6 +60,12 @@ public class BeatmapSelectManager : MonoBehaviour
         mapSpeedSlider.onValueChanged.AddListener(UpdateMapSpeedLabel);
         approachRateSlider.onValueChanged.AddListener(UpdateApproachRateLabel);
 
+        // Load previously saved preferences
+        float savedMapSpeed = PlayerPrefs.GetFloat("PreferredMapSpeed", 1.0f); // Default to 1.0x
+        float savedApproachRate = PlayerPrefs.GetFloat("PreferredApproachRate", 1.0f); // Default to 1.0s
+        mapSpeedSlider.value = savedMapSpeed;
+        approachRateSlider.value = savedApproachRate;
+
         UpdateMapSpeedLabel(mapSpeedSlider.value);
         UpdateApproachRateLabel(approachRateSlider.value);
     }
@@ -184,6 +190,9 @@ public class BeatmapSelectManager : MonoBehaviour
     {
         if (approachRateLabel != null)
             approachRateLabel.text = "Approach: " + value.ToString("0.0") + "s";
+
+        PlayerPrefs.SetFloat("PreferredApproachRate", value);
+        PlayerPrefs.Save();
     }
 
     string FormatTime(float seconds)
